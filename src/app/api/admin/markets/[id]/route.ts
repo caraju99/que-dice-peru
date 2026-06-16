@@ -1,102 +1,62 @@
-export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) return null;
+export const runtime = 'nodejs';
 
-  const user = await prisma.user.findUnique({
-    where: { id: (session.user as any).id }
-  });
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const { outcome } = await req.json();
 
-  return user?.isAdmin ? user : null;
-}
-
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const admin = await requireAdmin();
-  if (!admin) {
-    return NextResponse.json({ error: 'No autorizado.' }, { status: 403 });
-  }
-
-  const body = await req.json();
-  const { outcome } = body;
-
-  if (outcome !== 'si' && outcome !== 'no') {
-    return NextResponse.json(
-      { error: 'El resultado debe ser "si" o "no".' },
-      { status: 400 }
-    );
-  }
-
-  const market = await prisma.market.findUnique({
-    where: { id: params.id },
-    include: { positions: true }
-  });
-
-  if (!market) {
-    return NextResponse.json({ error: 'Mercado no encontrado.' }, { status: 404 });
-  }
-
-  if (market.resolved) {
-    return NextResponse.json({ error: 'Ya fue resuelto.' }, { status: 400 });
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.market.update({
-      where: { id: market.id },
-      data: {
-        resolved: true,
-        outcome,
-        probability: outcome === 'si' ? 100 : 0
-      }
+    const market = await prisma.market.findUnique({
+      where: { id: params.id },
+      include: { positions: true }
     });
 
-    for (const position of market.positions) {
-      if (position.status !== 'activo') continue;
+    if (!market) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
-      const won = position.direction === outcome;
-      const payout = won ? Math.round(position.amount / position.price) : 0;
-
-      await tx.position.update({
-        where: { id: position.id },
+    await prisma.$transaction(async (tx) => {
+      await tx.market.update({
+        where: { id: params.id },
         data: {
-          status: won ? 'ganado' : 'perdido',
-          payout
+          resolved: true,
+          outcome
         }
       });
 
-      if (won && payout > 0) {
-        await tx.user.update({
-          where: { id: position.userId },
+      for (const position of market.positions) {
+        const won = position.direction === outcome;
+        const payout = won ? Math.round(position.amount / position.price) : 0;
+
+        await tx.position.update({
+          where: { id: position.id },
           data: {
-            diceBalance: { increment: payout }
+            status: won ? 'ganado' : 'perdido',
+            payout
           }
         });
-      }
-    }
-  });
 
-  return NextResponse.json({ success: true });
+        if (won) {
+          await tx.user.update({
+            where: { id: position.userId },
+            data: {
+              diceBalance: { increment: payout }
+            }
+          });
+        }
+      }
+    });
+
+    return NextResponse.json({ success: true });
+
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
 }
 
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const admin = await requireAdmin();
-  if (!admin) {
-    return NextResponse.json({ error: 'No autorizado.' }, { status: 403 });
-  }
-
-  await prisma.market.delete({
-    where: { id: params.id }
-  });
-
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  await prisma.market.delete({ where: { id: params.id } });
   return NextResponse.json({ success: true });
 }
