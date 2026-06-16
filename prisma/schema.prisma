@@ -1,0 +1,125 @@
+// Esquema de base de datos para ¿Qué Dice Perú?
+// Por defecto usa SQLite para que el proyecto corra sin configurar un servidor.
+// Para producción, cambia provider a "postgresql" y DATABASE_URL en .env
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----- Autenticación (NextAuth) -----
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ----- Usuarios -----
+
+model User {
+  id          String   @id @default(cuid())
+  name        String?
+  email       String   @unique
+  image       String?
+  isAdmin     Boolean  @default(false)
+  diceBalance Int      @default(10000)
+  createdAt   DateTime @default(now())
+
+  accounts  Account[]
+  sessions  Session[]
+  positions Position[]
+  badges    UserBadge[]
+}
+
+// ----- Mercados de predicción -----
+
+model Market {
+  id          String   @id @default(cuid())
+  title       String
+  category    String // deportes | politica | economia | cultura | gaming
+  emoji       String?
+  probability Int      @default(50) // probabilidad de "SI" en %, 1-99
+  volume      Int      @default(0) // suma de DICE Coins apostados
+  closesAt    DateTime
+  resolved    Boolean  @default(false)
+  outcome     String? // "si" | "no" | null mientras no se resuelve
+  createdAt   DateTime @default(now())
+
+  positions Position[]
+}
+
+// ----- Posiciones de los usuarios -----
+
+model Position {
+  id        String   @id @default(cuid())
+  userId    String
+  marketId  String
+  direction String // "si" | "no"
+  amount    Int // DICE Coins apostados
+  price     Float // precio (probabilidad/100) al momento de comprar
+  status    String   @default("activo") // activo | ganado | perdido
+  payout    Int? // DICE Coins recibidos si ganó
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+}
+
+// ----- Badges / Logros -----
+
+model Badge {
+  id          String @id @default(cuid())
+  code        String @unique // ej: "oraculo_peru"
+  name        String
+  description String
+  icon        String
+
+  users UserBadge[]
+}
+
+model UserBadge {
+  id       String   @id @default(cuid())
+  userId   String
+  badgeId  String
+  earnedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+}
