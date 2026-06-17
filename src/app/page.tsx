@@ -15,6 +15,7 @@ const FILTERS = ['todos', ...Object.keys(CATEGORY_LABELS)];
 export default function HomePage() {
   const { data: session } = useSession();
   const [markets, setMarkets] = useState<MarketDTO[]>([]);
+  const [allMarkets, setAllMarkets] = useState<MarketDTO[]>([]);
   const [filter, setFilter] = useState('todos');
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<{ market: MarketDTO; direction: 'si' | 'no' } | null>(null);
@@ -25,6 +26,13 @@ export default function HomePage() {
     setBalance((session?.user as any)?.diceBalance ?? 0);
   }, [session]);
 
+  // Carga todos los mercados para el banner
+  useEffect(() => {
+    fetch('/api/markets')
+      .then((r) => r.json())
+      .then((data) => setAllMarkets(data.markets ?? []));
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     const qs = filter !== 'todos' ? `?category=${filter}` : '';
@@ -33,6 +41,11 @@ export default function HomePage() {
       .then((data) => setMarkets(data.markets ?? []))
       .finally(() => setLoading(false));
   }, [filter]);
+
+  // El mercado más popular = mayor volumen
+  const featured = allMarkets.length > 0
+    ? allMarkets.reduce((a, b) => a.volume > b.volume ? a : b)
+    : null;
 
   function showToast(msg: string) {
     setToast(msg);
@@ -59,6 +72,7 @@ export default function HomePage() {
 
     setBalance(data.diceBalance);
     setMarkets((prev) => prev.map((m) => (m.id === data.market.id ? data.market : m)));
+    setAllMarkets((prev) => prev.map((m) => (m.id === data.market.id ? data.market : m)));
     setModal(null);
     showToast(`Posición comprada: ${amount.toLocaleString()} DICE en ${modal.direction === 'si' ? 'SÍ' : 'NO'}`);
   }
@@ -68,6 +82,49 @@ export default function HomePage() {
       <Hero />
 
       <div className="p-4">
+
+        {/* Banner mercado del día */}
+        {featured && (
+          <div className="mb-4 rounded-2xl border border-brand-border p-4"
+            style={{ background: 'linear-gradient(135deg, #F5EED7 0%, #EFE4C4 100%)' }}
+          >
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-black/8 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-dark">
+              🔥 Mercado más popular
+            </div>
+            <p className="font-display text-base font-extrabold leading-snug text-brand-dark mb-3">
+              {featured.title}
+            </p>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="font-display text-4xl font-extrabold text-brand-greenDark leading-none">
+                  {featured.probability}%
+                </p>
+                <p className="text-xs font-semibold text-brand-dark/60 mt-0.5">
+                  probabilidad de SÍ
+                </p>
+                <p className="text-xs text-brand-dark/50 mt-1">
+                  👥 {featured.volume.toLocaleString()} DICE en juego
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setModal({ market: featured, direction: 'si' })}
+                  className="rounded-lg border border-brand-green/30 bg-brand-green/15 px-4 py-2 text-xs font-bold text-brand-greenDark hover:bg-brand-green/25 transition-colors"
+                >
+                  COMPRAR SÍ
+                </button>
+                <button
+                  onClick={() => setModal({ market: featured, direction: 'no' })}
+                  className="rounded-lg border border-brand-red/25 bg-brand-red/10 px-4 py-2 text-xs font-bold text-brand-red hover:bg-brand-red/20 transition-colors"
+                >
+                  COMPRAR NO
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Wallet o prompt de login */}
         {session ? (
           <WalletBar balance={balance} />
         ) : (
@@ -86,6 +143,12 @@ export default function HomePage() {
 
         <div className="mb-1 flex items-center justify-between">
           <h2 className="font-display text-base font-bold text-brand-text">Mercados activos</h2>
+          <Link
+            href="/tendencias"
+            className="text-xs font-semibold text-brand-green hover:underline"
+          >
+            Ver tendencias →
+          </Link>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5">

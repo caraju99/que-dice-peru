@@ -20,6 +20,7 @@ export function Navbar() {
           {/* Links desktop */}
           <nav className="hidden items-center gap-4 text-xs font-semibold text-brand-text2 sm:flex">
             <Link href="/" className="hover:text-brand-text transition-colors">Mercados</Link>
+            <Link href="/tendencias" className="hover:text-brand-text transition-colors">Tendencias</Link>
             <Link href="/ranking" className="hover:text-brand-text transition-colors">Ranking</Link>
             {session && <Link href="/perfil" className="hover:text-brand-text transition-colors">Perfil</Link>}
             {(session?.user as any)?.isAdmin && (
@@ -70,6 +71,7 @@ export function Navbar() {
           <div className="border-t border-brand-border bg-white px-4 py-3 sm:hidden">
             <nav className="flex flex-col gap-3">
               <Link href="/" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-brand-text2 hover:text-brand-text">Mercados</Link>
+              <Link href="/tendencias" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-brand-text2 hover:text-brand-text">Tendencias</Link>
               <Link href="/ranking" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-brand-text2 hover:text-brand-text">Ranking</Link>
               {session && (
                 <Link href="/perfil" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-brand-text2 hover:text-brand-text">Perfil</Link>
@@ -96,17 +98,20 @@ export function Navbar() {
             <span className="text-lg">🏠</span>
             <span className="text-[10px] font-semibold text-brand-text2">Inicio</span>
           </Link>
+          <Link href="/tendencias" className="flex flex-col items-center gap-0.5 px-3 py-1">
+            <span className="text-lg">📈</span>
+            <span className="text-[10px] font-semibold text-brand-text2">Tendencias</span>
+          </Link>
           <Link href="/ranking" className="flex flex-col items-center gap-0.5 px-3 py-1">
             <span className="text-lg">🏆</span>
             <span className="text-[10px] font-semibold text-brand-text2">Ranking</span>
           </Link>
-          {session && (
+          {session ? (
             <Link href="/perfil" className="flex flex-col items-center gap-0.5 px-3 py-1">
               <span className="text-lg">👤</span>
               <span className="text-[10px] font-semibold text-brand-text2">Perfil</span>
             </Link>
-          )}
-          {!session && (
+          ) : (
             <Link href="/login" className="flex flex-col items-center gap-0.5 px-3 py-1">
               <span className="text-lg">👤</span>
               <span className="text-[10px] font-semibold text-brand-text2">Entrar</span>
