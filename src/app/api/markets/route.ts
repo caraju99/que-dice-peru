@@ -4,11 +4,16 @@ import { prisma } from '@/lib/prisma';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// SOLO GET (para aislar el error)
+// SOLO GET (mercados activos)
 export async function GET() {
   try {
     const markets = await prisma.market.findMany({
-      orderBy: { createdAt: 'desc' }
+      where: {
+        resolved: false
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
     });
 
     return NextResponse.json({ markets });
