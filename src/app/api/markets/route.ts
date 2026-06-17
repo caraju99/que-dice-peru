@@ -1,15 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// SOLO GET (mercados activos)
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const category = req.nextUrl.searchParams.get('category');
+
     const markets = await prisma.market.findMany({
       where: {
-        resolved: false
+        resolved: false,
+        ...(category && category !== 'todos' ? { category } : {})
       },
       orderBy: {
         createdAt: 'desc'
