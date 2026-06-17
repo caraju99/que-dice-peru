@@ -1,6 +1,4 @@
 // Esquema de base de datos para ¿Qué Dice Perú?
-// Por defecto usa SQLite para que el proyecto corra sin configurar un servidor.
-// Para producción, cambia provider a "postgresql" y DATABASE_URL en .env
 
 generator client {
   provider = "prisma-client-js"
@@ -71,16 +69,17 @@ model User {
 model Market {
   id          String   @id @default(cuid())
   title       String
-  category    String // deportes | politica | economia | cultura | gaming
+  category    String
   emoji       String?
-  probability Int      @default(50) // probabilidad de "SI" en %, 1-99
-  volume      Int      @default(0) // suma de DICE Coins apostados
+  probability Int      @default(50)
+  volume      Int      @default(0)
   closesAt    DateTime
   resolved    Boolean  @default(false)
-  outcome     String? // "si" | "no" | null mientras no se resuelve
+  outcome     String?
   createdAt   DateTime @default(now())
 
   positions Position[]
+  snapshots ProbabilitySnapshot[]
 }
 
 // ----- Posiciones de los usuarios -----
@@ -89,14 +88,25 @@ model Position {
   id        String   @id @default(cuid())
   userId    String
   marketId  String
-  direction String // "si" | "no"
-  amount    Int // DICE Coins apostados
-  price     Float // precio (probabilidad/100) al momento de comprar
-  status    String   @default("activo") // activo | ganado | perdido
-  payout    Int? // DICE Coins recibidos si ganó
+  direction String
+  amount    Int
+  price     Float
+  status    String   @default("activo")
+  payout    Int?
   createdAt DateTime @default(now())
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+}
+
+// ----- Historial de probabilidad -----
+
+model ProbabilitySnapshot {
+  id          String   @id @default(cuid())
+  marketId    String
+  probability Int
+  createdAt   DateTime @default(now())
+
   market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
 }
 
@@ -104,7 +114,7 @@ model Position {
 
 model Badge {
   id          String @id @default(cuid())
-  code        String @unique // ej: "oraculo_peru"
+  code        String @unique
   name        String
   description String
   icon        String

@@ -54,6 +54,10 @@ export async function POST(req: NextRequest) {
       }),
       tx.position.create({
         data: { userId, marketId, direction, amount, price, status: 'activo' }
+      }),
+      // Guarda snapshot de la nueva probabilidad
+      tx.probabilitySnapshot.create({
+        data: { marketId, probability: newProbability }
       })
     ]);
 
@@ -98,7 +102,6 @@ export async function PATCH(req: NextRequest) {
 
     const payout = Math.round(position.amount * (currentPrice / position.price));
 
-    // Mueve probabilidad en sentido contrario al vender
     const shift = Math.min(3, Math.max(1, Math.round(position.amount / 400)));
     let newProbability = position.market.probability + (position.direction === 'si' ? -shift : shift);
     newProbability = Math.min(99, Math.max(1, newProbability));
@@ -115,6 +118,10 @@ export async function PATCH(req: NextRequest) {
       tx.market.update({
         where: { id: position.market.id },
         data: { probability: newProbability }
+      }),
+      // Guarda snapshot al vender también
+      tx.probabilitySnapshot.create({
+        data: { marketId: position.market.id, probability: newProbability }
       })
     ]);
 

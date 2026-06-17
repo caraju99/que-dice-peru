@@ -9,6 +9,11 @@ export const CATEGORY_LABELS: Record<string, string> = {
   gaming: 'Gaming / Tecnología'
 };
 
+export type SnapshotDTO = {
+  probability: number;
+  createdAt: string;
+};
+
 export type MarketDTO = {
   id: string;
   title: string;
@@ -19,6 +24,7 @@ export type MarketDTO = {
   closesAt: string;
   resolved: boolean;
   outcome: string | null;
+  history: SnapshotDTO[];
 };
 
 export type PositionDTO = {

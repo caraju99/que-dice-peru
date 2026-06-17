@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useParams, useRouter } from 'next/navigation';
 import { BuyModal } from '@/components/BuyModal';
@@ -15,29 +15,137 @@ const CATEGORY_LABELS: Record<string, string> = {
   gaming: 'Gaming / IA'
 };
 
-function Sparkline({ probability, color }: { probability: number; color: string }) {
-  const data = Array.from({ length: 8 }, (_, i) => {
-    const offset = Math.sin(i * 0.9 + probability) * 10;
-    return Math.min(99, Math.max(1, Math.round(probability - 12 + (i * 12 / 7) + offset)));
-  });
-  data[data.length - 1] = probability;
-  const w = 200, h = 48;
-  const min = Math.min(...data), max = Math.max(...data);
+const PERIODS = [
+  { key: '1d', label: '1D' },
+  { key: '1s', label: '1S' },
+  { key: '1m', label: '1M' },
+  { key: '1a', label: '1A' },
+  { key: 'all', label: 'Todo' }
+];
+
+function Chart({ data, color, timestamps }: {
+  data: number[];
+  color: string;
+  timestamps?: string[];
+}) {
+  const w = 600, h = 160;
+  const [tooltip, setTooltip] = useState<{
+    x: number; y: number; prob: number; time: string
+  } | null>(null);
+
+  if (data.length < 2) {
+    return (
+      <div className="flex h-40 w-full items-center justify-center rounded-xl bg-brand-surface">
+        <p className="text-xs text-brand-text2">
+          Sin historial aún — empieza a apostar para ver el gráfico
+        </p>
+      </div>
+    );
+  }
+
+  const min = Math.max(0, Math.min(...data) - 5);
+  const max = Math.min(100, Math.max(...data) + 5);
   const range = (max - min) || 1;
   const step = w / (data.length - 1);
-  const points = data.map((v, i) => {
-    const x = i * step;
-    const y = h - ((v - min) / range) * (h - 4) - 2;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+
+  const pts = data.map((v, i) => ({
+    x: i * step,
+    y: h - ((v - min) / range) * (h - 16) - 8,
+    v
+  }));
+
+  const points = pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   const area = `${points} ${w},${h} 0,${h}`;
+
+  function formatTime(iso: string) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    const hrs = Math.floor(mins / 60);
+    const days = Math.floor(hrs / 24);
+    if (days > 0) return `Hace ${days}d`;
+    if (hrs > 0) return `Hace ${hrs}h`;
+    if (mins > 0) return `Hace ${mins}m`;
+    return 'Ahora';
+  }
+
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-      <polygon points={area} fill={color} opacity="0.12" />
-      <polyline points={points} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className="relative w-full overflow-hidden rounded-xl bg-brand-surface p-2">
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        className="w-full"
+        style={{ height: 160 }}
+        onMouseLeave={() => setTooltip(null)}
+      >
+        {/* Grid lines */}
+        {[25, 50, 75].map((pct) => {
+          const y = h - ((pct - min) / range) * (h - 16) - 8;
+          return (
+            <g key={pct}>
+              <line x1="0" y1={y} x2={w} y2={y} stroke="#E5E5E0" strokeWidth="1" strokeDasharray="4 4" />
+              <text x="4" y={y - 3} fontSize="8" fill="#9B9B96">{pct}%</text>
+            </g>
+          );
+        })}
+
+        <polygon points={area} fill={color} opacity="0.08" />
+        <polyline
+          points={points}
+          fill="none"
+          stroke={color}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* Área interactiva */}
+        {pts.map((p, i) => (
+          <circle
+            key={i}
+            cx={p.x}
+            cy={p.y}
+            r={8}
+            fill="transparent"
+            onMouseEnter={() => setTooltip({
+              x: p.x,
+              y: p.y,
+              prob: p.v,
+              time: timestamps?.[i] ? formatTime(timestamps[i]) : ''
+            })}
+          />
+        ))}
+
+        {/* Punto actual */}
+        <circle
+          cx={pts[pts.length - 1].x}
+          cy={pts[pts.length - 1].y}
+          r={4}
+          fill={color}
+        />
+      </svg>
+
+      {tooltip && (
+        <div
+          className="pointer-events-none absolute z-10 rounded-lg border border-brand-border bg-white px-3 py-1.5 shadow-md"
+          style={{
+            left: `${Math.min(Math.max((tooltip.x / w) * 100, 5), 75)}%`,
+            top: 8,
+            transform: 'translateX(-50%)',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <p className="text-[13px] font-extrabold font-display" style={{ color }}>
+            {tooltip.prob}%
+          </p>
+          {tooltip.time && (
+            <p className="text-[10px] text-brand-text2">{tooltip.time}</p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
+
+const POLL_INTERVAL = 10000;
 
 export default function MercadoPage() {
   const { id } = useParams();
@@ -48,21 +156,48 @@ export default function MercadoPage() {
   const [modal, setModal] = useState<{ direction: 'si' | 'no' } | null>(null);
   const [balance, setBalance] = useState<number>((session?.user as any)?.diceBalance ?? 0);
   const [toast, setToast] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [period, setPeriod] = useState('all');
+  const idRef = useRef(id);
+  const periodRef = useRef(period);
+
+  useEffect(() => {
+    periodRef.current = period;
+  }, [period]);
 
   useEffect(() => {
     setBalance((session?.user as any)?.diceBalance ?? 0);
   }, [session]);
 
-  useEffect(() => {
-    fetch('/api/markets')
+  function fetchMarket(currentPeriod?: string) {
+    const p = currentPeriod ?? periodRef.current;
+    const qs = p !== 'all' ? `?period=${p}` : '';
+    fetch(`/api/markets${qs}`)
       .then((r) => r.json())
       .then((data) => {
-        const found = (data.markets ?? []).find((m: MarketDTO) => m.id === id);
-        if (found) setMarket(found);
-        else router.push('/');
+        const found = (data.markets ?? []).find((m: MarketDTO) => m.id === idRef.current);
+        if (found) {
+          setMarket(found);
+          setLastUpdated(new Date());
+        } else {
+          router.push('/');
+        }
       })
       .finally(() => setLoading(false));
-  }, [id, router]);
+  }
+
+  useEffect(() => {
+    fetchMarket();
+  }, [id]);
+
+  useEffect(() => {
+    fetchMarket(period);
+  }, [period]);
+
+  useEffect(() => {
+    const interval = setInterval(() => fetchMarket(), POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, []);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -82,6 +217,7 @@ export default function MercadoPage() {
     setMarket(data.market);
     setModal(null);
     showToast(`Posición comprada: ${amount.toLocaleString()} DICE en ${modal?.direction === 'si' ? 'SÍ' : 'NO'}`);
+    fetchMarket();
   }
 
   function shareWhatsApp() {
@@ -98,37 +234,66 @@ export default function MercadoPage() {
   const daysLeft = Math.max(0, Math.ceil((new Date(market.closesAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
   const trendUp = market.probability >= 50;
   const trendColor = trendUp ? '#00C853' : '#E63946';
+  const hasHistory = market.history && market.history.length >= 2;
+  const chartData = hasHistory ? market.history.map((s) => s.probability) : [market.probability];
+  const timestamps = hasHistory ? market.history.map((s) => s.createdAt) : undefined;
 
   return (
     <div className="p-4 pb-20">
-
-      {/* Breadcrumb */}
       <button onClick={() => router.push('/')} className="mb-4 text-xs font-semibold text-brand-text2 hover:text-brand-text transition-colors">
         ← Volver a mercados
       </button>
 
-      {/* Header */}
       <div className="rounded-2xl border border-brand-border bg-white p-5 shadow-sm mb-4">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-brand-green">
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-brand-green">
           {CATEGORY_LABELS[market.category] ?? market.category} {market.emoji}
         </p>
         <h1 className="font-display text-xl font-extrabold leading-snug text-brand-text mb-4">
           {market.title}
         </h1>
 
-        {/* Probabilidad grande */}
-        <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+        {/* Probabilidad */}
+        <div className="mb-3 flex items-end justify-between">
           <div>
             <p className="font-display text-5xl font-extrabold leading-none text-brand-green">
               {market.probability}%
             </p>
             <p className="text-xs font-semibold text-brand-text2 mt-1">probabilidad de SÍ</p>
+            {lastUpdated && (
+              <p className="text-[10px] text-brand-text2 mt-1">
+                🔴 En vivo · {lastUpdated.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </p>
+            )}
           </div>
-          <Sparkline probability={market.probability} color={trendColor} />
+          <div className="text-right">
+            <p className="text-sm font-bold" style={{ color: trendColor }}>
+              {trendUp ? '▲ Al alza' : '▼ A la baja'}
+            </p>
+          </div>
         </div>
 
+        {/* Botones de período */}
+        <div className="mb-3 flex gap-1.5">
+          {PERIODS.map((p) => (
+            <button
+              key={p.key}
+              onClick={() => setPeriod(p.key)}
+              className={`rounded-lg px-3 py-1 text-xs font-bold transition-colors ${
+                period === p.key
+                  ? 'bg-brand-green text-white'
+                  : 'bg-brand-surface text-brand-text2 hover:bg-brand-green/10'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Gráfico grande */}
+        <Chart data={chartData} color={trendColor} timestamps={timestamps} />
+
         {/* Barra */}
-        <div className="relative h-3 overflow-hidden rounded-full bg-brand-surface mb-2">
+        <div className="relative mt-4 h-3 overflow-hidden rounded-full bg-brand-surface mb-2">
           <div className="h-full rounded-full bg-brand-green transition-[width] duration-700" style={{ width: `${market.probability}%` }} />
           <div className="absolute right-0 top-0 h-full rounded-full bg-brand-red" style={{ width: `${no}%` }} />
         </div>
@@ -148,14 +313,12 @@ export default function MercadoPage() {
             <p className="text-[10px] text-brand-text2">restantes</p>
           </div>
           <div className="rounded-xl bg-brand-surface p-3 text-center">
-            <p className="font-display text-base font-bold" style={{ color: trendColor }}>
-              {trendUp ? '▲ Sube' : '▼ Baja'}
-            </p>
-            <p className="text-[10px] text-brand-text2">tendencia</p>
+            <p className="font-display text-base font-bold text-brand-text">{market.history?.length ?? 0}</p>
+            <p className="text-[10px] text-brand-text2">movimientos</p>
           </div>
         </div>
 
-        {/* Botones */}
+        {/* Botones compra */}
         <div className="flex gap-2 mb-3">
           <button
             onClick={() => setModal({ direction: 'si' })}
@@ -171,7 +334,6 @@ export default function MercadoPage() {
           </button>
         </div>
 
-        {/* Compartir */}
         <button
           onClick={shareWhatsApp}
           className="w-full rounded-xl bg-[#25D366] py-2.5 text-sm font-bold text-white hover:bg-[#20BA5A] transition-colors"
@@ -180,7 +342,6 @@ export default function MercadoPage() {
         </button>
       </div>
 
-      {/* Info adicional */}
       <div className="rounded-xl border border-brand-border bg-white p-4 text-sm text-brand-text2">
         <p className="font-bold text-brand-text mb-1">¿Cómo funciona?</p>
         <p className="text-xs leading-relaxed">
