@@ -5,8 +5,7 @@ import { prisma } from '@/lib/prisma';
 
 const MIN_AMOUNT = 10;
 
-// POST /api/positions
-// body: { marketId: string, direction: "si" | "no", amount: number }
+// POST /api/positions — Comprar posición
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -40,8 +39,6 @@ export async function POST(req: NextRequest) {
 
     const price = direction === 'si' ? market.probability / 100 : (100 - market.probability) / 100;
 
-    // Mueve la probabilidad del mercado: comprar SÍ la sube, comprar NO la baja.
-    // Movimiento simple proporcional al tamaño de la apuesta (máx. 5 puntos).
     const shift = Math.min(5, Math.max(1, Math.round(amount / 200)));
     let newProbability = market.probability + (direction === 'si' ? shift : -shift);
     newProbability = Math.min(99, Math.max(1, newProbability));
@@ -56,14 +53,7 @@ export async function POST(req: NextRequest) {
         data: { probability: newProbability, volume: market.volume + amount }
       }),
       tx.position.create({
-        data: {
-          userId,
-          marketId,
-          direction,
-          amount,
-          price,
-          status: 'activo'
-        }
+        data: { userId, marketId, direction, amount, price, status: 'activo' }
       })
     ]);
 
@@ -74,5 +64,66 @@ export async function POST(req: NextRequest) {
     diceBalance: result.updatedUser.diceBalance,
     market: result.updatedMarket,
     position: result.position
+  });
+}
+
+// PATCH /api/positions — Vender posición
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Debes iniciar sesión.' }, { status: 401 });
+  }
+
+  const userId = (session.user as any).id as string;
+  const { positionId } = await req.json();
+
+  if (!positionId) {
+    return NextResponse.json({ error: 'Falta el ID de la posición.' }, { status: 400 });
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const position = await tx.position.findUnique({
+      where: { id: positionId },
+      include: { market: true }
+    });
+
+    if (!position) throw new Error('Posición no encontrada.');
+    if (position.userId !== userId) throw new Error('No autorizado.');
+    if (position.status !== 'activo') throw new Error('Esta posición ya no está activa.');
+    if (position.market.resolved) throw new Error('Este mercado ya fue resuelto.');
+
+    const currentPrice = position.direction === 'si'
+      ? position.market.probability / 100
+      : (100 - position.market.probability) / 100;
+
+    const payout = Math.round(position.amount * (currentPrice / position.price));
+
+    // Mueve probabilidad en sentido contrario al vender
+    const shift = Math.min(3, Math.max(1, Math.round(position.amount / 400)));
+    let newProbability = position.market.probability + (position.direction === 'si' ? -shift : shift);
+    newProbability = Math.min(99, Math.max(1, newProbability));
+
+    const [updatedPosition, updatedUser] = await Promise.all([
+      tx.position.update({
+        where: { id: positionId },
+        data: { status: 'vendido', payout }
+      }),
+      tx.user.update({
+        where: { id: userId },
+        data: { diceBalance: { increment: payout } }
+      }),
+      tx.market.update({
+        where: { id: position.market.id },
+        data: { probability: newProbability }
+      })
+    ]);
+
+    return { updatedPosition, updatedUser, payout };
+  });
+
+  return NextResponse.json({
+    diceBalance: result.updatedUser.diceBalance,
+    payout: result.payout,
+    position: result.updatedPosition
   });
 }

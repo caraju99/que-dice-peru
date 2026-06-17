@@ -42,6 +42,12 @@ export function MarketCard({ market, onBuy }: Props) {
   const trendUp = trend[trend.length - 1] >= trend[0];
   const trendColor = trendUp ? '#00C853' : '#E63946';
 
+  function shareWhatsApp() {
+    const url = `https://que-dice-peru-cp93.vercel.app`;
+    const text = `🇵🇪 *¿Qué Dice Perú?*\n\n"${market.title}"\n\nEl mercado cree que hay un *${market.probability}%* de probabilidad de que SÍ pase.\n\n¿Qué crees tú? Predice gratis 👇\n${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
+
   return (
     <div className="rounded-card border border-brand-border bg-white p-4 shadow-sm transition-shadow hover:shadow-md border-l-[3px] border-l-brand-green">
       <div className="mb-2 flex items-start justify-between gap-3">
@@ -101,9 +107,17 @@ export function MarketCard({ market, onBuy }: Props) {
           <span>👥 {market.volume.toLocaleString()} DICE</span>
           <span>⏱ {daysLeft}d restantes</span>
         </div>
-        <span style={{ color: trendColor }} className="font-bold">
-          {trendUp ? '▲ Al alza' : '▼ A la baja'}
-        </span>
+        <div className="flex items-center gap-3">
+          <span style={{ color: trendColor }} className="font-bold">
+            {trendUp ? '▲ Al alza' : '▼ A la baja'}
+          </span>
+          <button
+            onClick={shareWhatsApp}
+            className="flex items-center gap-1 rounded-lg bg-[#25D366] px-2.5 py-1 text-[10px] font-bold text-white hover:bg-[#20BA5A] transition-colors"
+          >
+            <span>📲</span> Compartir
+          </button>
+        </div>
       </div>
     </div>
   );
