@@ -58,23 +58,34 @@ export const authOptions: NextAuthOptions = {
   },
   providers,
   callbacks: {
-    async jwt({ token, user }) {
-      // Primera vez que entra: guarda el id en el token
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
+      }
+      // Para Google Login — busca el usuario por email
+      if (account?.provider === 'google' && token.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: token.email as string }
+        });
+        if (dbUser) {
+          token.id = dbUser.id;
+          // Asegura que tenga DICE Coins
+          if (dbUser.diceBalance === 0) {
+            await prisma.user.update({
+              where: { id: dbUser.id },
+              data: { diceBalance: 10000 }
+            });
+          }
+        }
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.id) {
-        // Pone el id real del usuario en la sesión
         (session.user as any).id = token.id as string;
-
-        // Trae datos frescos de la base de datos
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string }
         });
-
         if (dbUser) {
           (session.user as any).isAdmin = dbUser.isAdmin;
           (session.user as any).diceBalance = dbUser.diceBalance;

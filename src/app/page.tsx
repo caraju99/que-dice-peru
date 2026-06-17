@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Hero } from '@/components/Hero';
@@ -11,6 +11,7 @@ import { Toast } from '@/components/Toast';
 import { CATEGORY_LABELS, MarketDTO } from '@/lib/types';
 
 const FILTERS = ['todos', ...Object.keys(CATEGORY_LABELS)];
+const POLL_INTERVAL = 10000; // 10 segundos
 
 export default function HomePage() {
   const { data: session } = useSession();
@@ -21,28 +22,55 @@ export default function HomePage() {
   const [modal, setModal] = useState<{ market: MarketDTO; direction: 'si' | 'no' } | null>(null);
   const [balance, setBalance] = useState<number>((session?.user as any)?.diceBalance ?? 0);
   const [toast, setToast] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const filterRef = useRef(filter);
+
+  useEffect(() => {
+    filterRef.current = filter;
+  }, [filter]);
 
   useEffect(() => {
     setBalance((session?.user as any)?.diceBalance ?? 0);
   }, [session]);
 
-  // Carga todos los mercados para el banner
-  useEffect(() => {
+  function fetchMarkets(currentFilter: string, showLoading = false) {
+    if (showLoading) setLoading(true);
+    const qs = currentFilter !== 'todos' ? `?category=${currentFilter}` : '';
+    fetch(`/api/markets${qs}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setMarkets(data.markets ?? []);
+        setLastUpdated(new Date());
+      })
+      .finally(() => setLoading(false));
+  }
+
+  function fetchAllMarkets() {
     fetch('/api/markets')
       .then((r) => r.json())
       .then((data) => setAllMarkets(data.markets ?? []));
+  }
+
+  // Carga inicial
+  useEffect(() => {
+    fetchAllMarkets();
+    fetchMarkets(filter, true);
   }, []);
 
+  // Recarga cuando cambia el filtro
   useEffect(() => {
-    setLoading(true);
-    const qs = filter !== 'todos' ? `?category=${filter}` : '';
-    fetch(`/api/markets${qs}`)
-      .then((r) => r.json())
-      .then((data) => setMarkets(data.markets ?? []))
-      .finally(() => setLoading(false));
+    fetchMarkets(filter, true);
   }, [filter]);
 
-  // El mercado más popular = mayor volumen
+  // Polling cada 10 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchMarkets(filterRef.current, false);
+      fetchAllMarkets();
+    }, POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, []);
+
   const featured = allMarkets.length > 0
     ? allMarkets.reduce((a, b) => a.volume > b.volume ? a : b)
     : null;
@@ -143,12 +171,16 @@ export default function HomePage() {
 
         <div className="mb-1 flex items-center justify-between">
           <h2 className="font-display text-base font-bold text-brand-text">Mercados activos</h2>
-          <Link
-            href="/tendencias"
-            className="text-xs font-semibold text-brand-green hover:underline"
-          >
-            Ver tendencias →
-          </Link>
+          <div className="flex items-center gap-3">
+            {lastUpdated && (
+              <span className="text-[10px] text-brand-text2">
+                🔴 En vivo · {lastUpdated.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
+            <Link href="/tendencias" className="text-xs font-semibold text-brand-green hover:underline">
+              Ver tendencias →
+            </Link>
+          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-1.5">
