@@ -265,7 +265,7 @@ export default function ProfilePage() {
 
   // Separar por tipo
   const activas = positions.filter(p => p.status === 'activo');
-  const historial = positions.filter(p => p.status === 'tx_compra' || p.status === 'tx_venta').sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const historial = positions.filter(p => p.status === 'tx_compra' || p.status === 'tx_venta').sort((a, b) => new Date((b as any).createdAt).getTime() - new Date((a as any).createdAt).getTime());
   const resueltas = positions.filter(p => p.status === 'ganado' || p.status === 'perdido' || p.status === 'cerrado');
 
   return (
@@ -433,7 +433,7 @@ export default function ProfilePage() {
                       )}
                     </div>
                     <p className="text-[10px] text-brand-text3 font-mono mt-1">
-                      {new Date(p.createdAt).toLocaleString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+{new Date((p as any).createdAt).toLocaleString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
