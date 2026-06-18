@@ -51,7 +51,7 @@ export function Hero() {
           <h1 className="font-display text-5xl font-black leading-[1.05] tracking-tight text-white sm:text-6xl mb-5">
             El mercado
             <br />
-            donde <span className="text-brand-red">Perú</span>
+            donde el <span className="text-brand-red">Perú</span>
             <br />
             <span className="italic text-white/70">predice el futuro.</span>
           </h1>
