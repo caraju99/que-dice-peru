@@ -1,14 +1,21 @@
 export function WalletBar({ balance }: { balance: number }) {
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-card border border-brand-border bg-brand-surface p-4">
+    <div className="mb-4 flex items-center justify-between gap-3 rounded border border-white/[0.06] bg-brand-dark px-4 py-3.5">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-green font-display text-lg font-extrabold text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded bg-brand-red font-display text-sm font-bold text-white flex-shrink-0">
           D
         </div>
         <div>
-          <p className="font-display text-xl font-bold text-brand-text">{balance.toLocaleString()}</p>
-          <p className="text-[11px] font-medium text-brand-text2">DICE Coins disponibles</p>
+          <p className="font-mono text-lg font-medium text-brand-gold leading-none">
+            {balance.toLocaleString()}
+          </p>
+          <p className="text-[9px] font-bold uppercase tracking-[.07em] text-white/30 mt-0.5">
+            DICE disponibles
+          </p>
         </div>
+      </div>
+      <div className="text-[9px] font-bold uppercase tracking-wider text-white/20">
+        🔴 En vivo
       </div>
     </div>
   );
