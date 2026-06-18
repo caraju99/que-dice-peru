@@ -9,7 +9,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const market = await prisma.market.findUnique({
       where: { id: params.id },
-      include: { positions: true }
+      include: {
+        positions: {
+          where: { status: 'activo' }
+        }
+      }
     });
 
     if (!market) {
@@ -19,10 +23,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     await prisma.$transaction(async (tx) => {
       await tx.market.update({
         where: { id: params.id },
-        data: {
-          resolved: true,
-          outcome
-        }
+        data: { resolved: true, outcome }
       });
 
       for (const position of market.positions) {
@@ -37,12 +38,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           }
         });
 
-        if (won) {
+        if (won && payout > 0) {
           await tx.user.update({
             where: { id: position.userId },
-            data: {
-              diceBalance: { increment: payout }
-            }
+            data: { diceBalance: { increment: payout } }
           });
         }
       }
