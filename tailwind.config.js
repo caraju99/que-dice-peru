@@ -8,25 +8,34 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          green: '#00C853',
-          greenDark: '#00A846',
-          cream: '#F5EED7',
-          dark: '#0D0D0D',
-          red: '#E63946',
-          bg: '#FAFAF8',
-          surface: '#F1EFE8',
-          text: '#0D0D0D',
-          text2: '#6B6B66',
-          border: 'rgba(13,13,13,0.1)',
-          border2: 'rgba(13,13,13,0.18)'
+          red: '#C8102E',
+          redDark: '#9B0A22',
+          redSoft: 'rgba(200,16,46,0.08)',
+          redMid: 'rgba(200,16,46,0.18)',
+          gold: '#E8C547',
+          white: '#FAFAF7',
+          dark: '#111111',
+          dark2: '#1E1E1E',
+          dark3: '#2A2A2A',
+          text: '#111111',
+          text2: '#6B6B6B',
+          text3: '#9B9B9B',
+          surface: '#F2EFE9',
+          border: 'rgba(17,17,17,0.08)',
+          border2: 'rgba(17,17,17,0.14)',
+          // mantener compatibilidad
+          green: '#C8102E',
+          greenDark: '#9B0A22',
+          bg: '#FAFAF7',
         }
       },
       fontFamily: {
-        display: ['Syne', 'sans-serif'],
-        body: ['Inter', 'sans-serif']
+        display: ['Playfair Display', 'serif'],
+        body: ['DM Sans', 'sans-serif'],
+        mono: ['DM Mono', 'monospace']
       },
       borderRadius: {
-        card: '12px'
+        card: '6px'
       }
     }
   },

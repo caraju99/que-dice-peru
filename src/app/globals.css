@@ -2,32 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
 :root {
-  --g: #00c853;
-  --g2: #00a846;
-  --cream: #f5eed7;
-  --dark: #0d0d0d;
-  --red: #e63946;
-  --bg: #fafaf8;
-  --surface: #f1efe8;
-  --text: #0d0d0d;
-  --text2: #6b6b66;
-  --border: rgba(13, 13, 13, 0.1);
-  --border2: rgba(13, 13, 13, 0.18);
+  --red: #C8102E;
+  --red2: #9B0A22;
+  --red3: #E8192E;
+  --red-soft: rgba(200,16,46,0.08);
+  --red-mid: rgba(200,16,46,0.18);
+  --gold: #E8C547;
+  --white: #FAFAF7;
+  --dark: #111111;
+  --dark2: #1E1E1E;
+  --dark3: #2A2A2A;
+  --text: #111111;
+  --text2: #6B6B6B;
+  --text3: #9B9B9B;
+  --surface: #F2EFE9;
+  --border: rgba(17,17,17,0.08);
+  --border2: rgba(17,17,17,0.14);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  background: #111111;
+}
+
 body {
-  font-family: 'Inter', sans-serif;
-  background: var(--bg);
-  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  background: #FAFAF7;
+  color: #111111;
+  -webkit-font-smoothing: antialiased;
 }
 
 .font-display {
-  font-family: 'Syne', sans-serif;
+  font-family: 'Playfair Display', serif;
+}
+
+.font-mono {
+  font-family: 'DM Mono', monospace;
 }
