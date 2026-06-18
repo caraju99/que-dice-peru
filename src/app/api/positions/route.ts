@@ -11,7 +11,7 @@ function calcShift(amount: number, volume: number): number {
   return Math.min(2, Math.max(0.1, shift));
 }
 
-// POST /api/positions — Comprar posición
+// POST /api/positions — Comprar posición (acumula si ya existe)
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -43,27 +43,54 @@ export async function POST(req: NextRequest) {
     if (!market || market.resolved) throw new Error('Este mercado ya no está disponible.');
     if (user.diceBalance < amount) throw new Error('No tienes suficientes DICE Coins.');
 
-    const price = direction === 'si' ? market.probability / 100 : (100 - market.probability) / 100;
-
+    const newPrice = direction === 'si' ? market.probability / 100 : (100 - market.probability) / 100;
     const shift = calcShift(amount, market.volume);
     let newProbability = market.probability + (direction === 'si' ? shift : -shift);
     newProbability = Math.min(99, Math.max(1, Math.round(newProbability)));
 
-    const [updatedUser, updatedMarket, position] = await Promise.all([
-      tx.user.update({
-        where: { id: userId },
-        data: { diceBalance: user.diceBalance - amount }
-      }),
-      tx.market.update({
-        where: { id: marketId },
-        data: { probability: newProbability, volume: market.volume + amount }
-      }),
-      tx.position.create({
-        data: { userId, marketId, direction, amount, price, status: 'activo' }
-      }),
-      tx.probabilitySnapshot.create({
-        data: { marketId, probability: newProbability }
-      })
+    // Buscar posición activa existente en mismo mercado y dirección
+    const existingPosition = await tx.position.findFirst({
+      where: { userId, marketId, direction, status: 'activo' }
+    });
+
+    let position;
+
+    if (existingPosition) {
+      // Calcular precio promedio ponderado
+      const totalAmount = existingPosition.amount + amount;
+      const avgPrice = (existingPosition.price * existingPosition.amount + newPrice * amount) / totalAmount;
+
+      position = await tx.position.update({
+        where: { id: existingPosition.id },
+        data: {
+          amount: totalAmount,
+          price: avgPrice
+        }
+      });
+    } else {
+      // Crear nueva posición
+      position = await tx.position.create({
+        data: { userId, marketId, direction, amount, price: newPrice, status: 'activo' }
+      });
+    }
+
+    // Registrar transacción de compra
+    await tx.position.create({
+      data: {
+        userId,
+        marketId,
+        direction,
+        amount,
+        price: newPrice,
+        status: 'tx_compra',
+        parentId: position.id
+      }
+    });
+
+    const [updatedUser, updatedMarket] = await Promise.all([
+      tx.user.update({ where: { id: userId }, data: { diceBalance: user.diceBalance - amount } }),
+      tx.market.update({ where: { id: marketId }, data: { probability: newProbability, volume: market.volume + amount } }),
+      tx.probabilitySnapshot.create({ data: { marketId, probability: newProbability } })
     ]);
 
     return { updatedUser, updatedMarket, position };
@@ -76,7 +103,7 @@ export async function POST(req: NextRequest) {
   });
 }
 
-// PATCH /api/positions — Vender posición
+// PATCH /api/positions — Cerrar posición (total o parcial)
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -84,7 +111,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const userId = (session.user as any).id as string;
-  const { positionId } = await req.json();
+  const { positionId, sellAmount } = await req.json();
 
   if (!positionId) {
     return NextResponse.json({ error: 'Falta el ID de la posición.' }, { status: 400 });
@@ -101,40 +128,73 @@ export async function PATCH(req: NextRequest) {
     if (position.status !== 'activo') throw new Error('Esta posición ya no está activa.');
     if (position.market.resolved) throw new Error('Este mercado ya fue resuelto.');
 
+    const amountToSell = sellAmount && Number.isInteger(sellAmount) && sellAmount >= MIN_AMOUNT
+      ? Math.min(sellAmount, position.amount)
+      : position.amount;
+
+    const isPartial = amountToSell < position.amount;
+    const remainingAmount = position.amount - amountToSell;
+
     const currentPrice = position.direction === 'si'
       ? position.market.probability / 100
       : (100 - position.market.probability) / 100;
 
-    const payout = Math.round(position.amount * (currentPrice / position.price));
+    const payout = Math.round(amountToSell * (currentPrice / position.price));
 
-    const shift = calcShift(position.amount, position.market.volume);
+    const shift = calcShift(amountToSell, position.market.volume);
     let newProbability = position.market.probability + (position.direction === 'si' ? -shift : shift);
     newProbability = Math.min(99, Math.max(1, Math.round(newProbability)));
 
-    const [updatedPosition, updatedUser] = await Promise.all([
+    const ops: Promise<any>[] = [
+      // Actualizar posición principal
       tx.position.update({
         where: { id: positionId },
-        data: { status: 'vendido', payout }
+        data: {
+          amount: isPartial ? remainingAmount : amountToSell,
+          status: isPartial ? 'activo' : 'cerrado',
+          payout: isPartial ? null : payout
+        }
       }),
+      // Registrar transacción de venta
+      tx.position.create({
+        data: {
+          userId,
+          marketId: position.marketId,
+          direction: position.direction,
+          amount: amountToSell,
+          price: currentPrice,
+          status: 'tx_venta',
+          payout,
+          parentId: positionId
+        }
+      }),
+      // Pagar al usuario
       tx.user.update({
         where: { id: userId },
         data: { diceBalance: { increment: payout } }
       }),
+      // Mover mercado
       tx.market.update({
         where: { id: position.market.id },
         data: { probability: newProbability }
       }),
+      // Snapshot
       tx.probabilitySnapshot.create({
         data: { marketId: position.market.id, probability: newProbability }
       })
-    ]);
+    ];
 
-    return { updatedPosition, updatedUser, payout };
+    const [updatedPosition, , updatedUser] = await Promise.all(ops);
+
+    return { updatedPosition, updatedUser, payout, isPartial, amountToSell, remainingAmount };
   });
 
   return NextResponse.json({
     diceBalance: result.updatedUser.diceBalance,
     payout: result.payout,
-    position: result.updatedPosition
+    position: result.updatedPosition,
+    isPartial: result.isPartial,
+    amountToSell: result.amountToSell,
+    remainingAmount: result.remainingAmount
   });
 }

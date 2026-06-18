@@ -27,12 +27,23 @@ export async function GET() {
     return NextResponse.json({ error: 'Usuario no encontrado.' }, { status: 404 });
   }
 
-  const resolved = user.positions.filter((p) => p.status !== 'activo');
-  const won = resolved.filter((p) => p.status === 'ganado').length;
+  // Posiciones principales (no transacciones)
+  const mainPositions = user.positions.filter(p =>
+    p.status !== 'tx_compra' && p.status !== 'tx_venta'
+  );
+
+  // Transacciones (compras y ventas individuales)
+  const transactions = user.positions.filter(p =>
+    p.status === 'tx_compra' || p.status === 'tx_venta'
+  );
+
+  // Stats basadas en posiciones resueltas
+  const resolved = mainPositions.filter(p => p.status === 'ganado' || p.status === 'perdido');
+  const won = resolved.filter(p => p.status === 'ganado').length;
   const accuracy = resolved.length > 0 ? Math.round((won / resolved.length) * 100) : 0;
 
   const allBadges = await prisma.badge.findMany();
-  const earnedCodes = new Set(user.badges.map((b) => b.badge.code));
+  const earnedCodes = new Set(user.badges.map(b => b.badge.code));
 
   return NextResponse.json({
     user: {
@@ -43,22 +54,41 @@ export async function GET() {
       isAdmin: user.isAdmin
     },
     stats: {
-      totalPredictions: user.positions.length,
+      totalPredictions: mainPositions.filter(p => p.status === 'activo').length,
       accuracy,
       diceBalance: user.diceBalance
     },
-    positions: user.positions.map((p) => ({
-      id: p.id,
-      marketId: p.marketId,
-      marketTitle: p.market.title,
-      direction: p.direction,
-      amount: p.amount,
-      price: p.price,
-      status: p.status,
-      payout: p.payout,
-      probability: p.market.probability
-    })),
-    badges: allBadges.map((b) => ({
+    positions: [
+      // Posiciones principales
+      ...mainPositions.map(p => ({
+        id: p.id,
+        marketId: p.marketId,
+        marketTitle: p.market.title,
+        direction: p.direction as 'si' | 'no',
+        amount: p.amount,
+        price: p.price,
+        status: p.status,
+        payout: p.payout,
+        probability: p.market.probability,
+        parentId: p.parentId,
+        createdAt: p.createdAt.toISOString()
+      })),
+      // Transacciones individuales
+      ...transactions.map(p => ({
+        id: p.id,
+        marketId: p.marketId,
+        marketTitle: p.market.title,
+        direction: p.direction as 'si' | 'no',
+        amount: p.amount,
+        price: p.price,
+        status: p.status,
+        payout: p.payout,
+        probability: p.market.probability,
+        parentId: p.parentId,
+        createdAt: p.createdAt.toISOString()
+      }))
+    ],
+    badges: allBadges.map(b => ({
       code: b.code,
       name: b.name,
       description: b.description,

@@ -37,4 +37,5 @@ export type PositionDTO = {
   status: string;
   payout: number | null;
   probability: number;
+  parentId: string | null;
 };
