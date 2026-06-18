@@ -5,6 +5,12 @@ import { prisma } from '@/lib/prisma';
 
 const MIN_AMOUNT = 10;
 
+function calcShift(amount: number, volume: number): number {
+  const totalVolume = Math.max(volume + amount, 1);
+  const shift = (amount / totalVolume) * 50;
+  return Math.min(2, Math.max(0.1, shift));
+}
+
 // POST /api/positions — Comprar posición
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -39,9 +45,9 @@ export async function POST(req: NextRequest) {
 
     const price = direction === 'si' ? market.probability / 100 : (100 - market.probability) / 100;
 
-    const shift = Math.min(5, Math.max(1, Math.round(amount / 200)));
+    const shift = calcShift(amount, market.volume);
     let newProbability = market.probability + (direction === 'si' ? shift : -shift);
-    newProbability = Math.min(99, Math.max(1, newProbability));
+    newProbability = Math.min(99, Math.max(1, Math.round(newProbability)));
 
     const [updatedUser, updatedMarket, position] = await Promise.all([
       tx.user.update({
@@ -55,7 +61,6 @@ export async function POST(req: NextRequest) {
       tx.position.create({
         data: { userId, marketId, direction, amount, price, status: 'activo' }
       }),
-      // Guarda snapshot de la nueva probabilidad
       tx.probabilitySnapshot.create({
         data: { marketId, probability: newProbability }
       })
@@ -102,9 +107,9 @@ export async function PATCH(req: NextRequest) {
 
     const payout = Math.round(position.amount * (currentPrice / position.price));
 
-    const shift = Math.min(3, Math.max(1, Math.round(position.amount / 400)));
+    const shift = calcShift(position.amount, position.market.volume);
     let newProbability = position.market.probability + (position.direction === 'si' ? -shift : shift);
-    newProbability = Math.min(99, Math.max(1, newProbability));
+    newProbability = Math.min(99, Math.max(1, Math.round(newProbability)));
 
     const [updatedPosition, updatedUser] = await Promise.all([
       tx.position.update({
@@ -119,7 +124,6 @@ export async function PATCH(req: NextRequest) {
         where: { id: position.market.id },
         data: { probability: newProbability }
       }),
-      // Guarda snapshot al vender también
       tx.probabilitySnapshot.create({
         data: { marketId: position.market.id, probability: newProbability }
       })
