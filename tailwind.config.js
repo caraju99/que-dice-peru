@@ -23,16 +23,15 @@ module.exports = {
           surface: '#F2EFE9',
           border: 'rgba(17,17,17,0.08)',
           border2: 'rgba(17,17,17,0.14)',
-          // mantener compatibilidad
           green: '#C8102E',
           greenDark: '#9B0A22',
           bg: '#FAFAF7',
         }
       },
       fontFamily: {
-        display: ['Playfair Display', 'serif'],
-        body: ['DM Sans', 'sans-serif'],
-        mono: ['DM Mono', 'monospace']
+        display: ['var(--font-playfair)', 'Playfair Display', 'serif'],
+        body: ['var(--font-dm-sans)', 'DM Sans', 'sans-serif'],
+        mono: ['var(--font-dm-mono)', 'DM Mono', 'monospace']
       },
       borderRadius: {
         card: '6px'

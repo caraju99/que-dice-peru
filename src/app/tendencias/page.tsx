@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 type Market = {
   id: string;
@@ -22,13 +23,12 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function Sparkline({ probability, color }: { probability: number; color: string }) {
   const data = Array.from({ length: 8 }, (_, i) => {
-    const base = probability;
     const offset = Math.sin(i * 0.9 + probability) * 10;
-    return Math.min(99, Math.max(1, Math.round(base - 12 + (i * 12 / 7) + offset)));
+    return Math.min(99, Math.max(1, Math.round(probability - 12 + (i * 12 / 7) + offset)));
   });
   data[data.length - 1] = probability;
 
-  const w = 80, h = 28;
+  const w = 80, h = 32;
   const min = Math.min(...data), max = Math.max(...data);
   const range = (max - min) || 1;
   const step = w / (data.length - 1);
@@ -41,8 +41,8 @@ function Sparkline({ probability, color }: { probability: number; color: string 
 
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-      <polygon points={area} fill={color} opacity="0.12" />
-      <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <polygon points={area} fill={color} opacity="0.1" />
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -67,66 +67,87 @@ export default function TendenciasPage() {
     Math.max(0, Math.ceil((new Date(closesAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 
   return (
-    <div className="p-4 pb-20">
+    <div className="mx-auto max-w-3xl px-6 py-8 pb-24">
 
-      <div className="mb-4">
-        <h1 className="font-display text-2xl font-extrabold text-brand-text">
-          Tendencias 📈
+      {/* Header */}
+      <div className="mb-6">
+        <p className="text-[9px] font-bold uppercase tracking-[.1em] text-brand-text3 mb-2">
+          Mercados
+        </p>
+        <h1 className="font-display text-3xl font-bold text-brand-text mb-2">
+          Tendencias
         </h1>
-        <p className="mt-1 text-sm text-brand-text2">
-          Los mercados más activos ahora mismo
+        <p className="text-xs text-brand-text2">
+          Los mercados más activos ordenados por volumen
         </p>
       </div>
 
-      {loading && <p className="text-sm text-brand-text2">Cargando tendencias...</p>}
+      {loading && (
+        <p className="text-sm text-brand-text3 font-mono uppercase tracking-wider">
+          Cargando tendencias...
+        </p>
+      )}
 
-      <div className="grid gap-3">
+      <div className="grid gap-2">
         {markets.map((m, i) => {
           const trendUp = m.probability >= 50;
-          const color = trendUp ? '#00C853' : '#E63946';
+          const trendColor = '#C8102E';
           const days = daysLeft(m.closesAt);
+          const isTop3 = i < 3;
 
           return (
             <div
               key={m.id}
-              className="flex items-center gap-3 rounded-card border border-brand-border bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+              className="flex items-center gap-4 rounded border border-brand-border bg-white p-4 hover:shadow-sm transition-shadow"
+              style={isTop3 ? { borderLeft: '3px solid #C8102E' } : {}}
             >
               {/* Posición */}
-              <div className="font-display text-xl font-extrabold text-brand-text2 w-7 text-center flex-shrink-0">
-                {i + 1}
+              <div className="font-mono text-sm font-medium text-brand-text3 w-6 text-center flex-shrink-0">
+                {i === 0 ? '🔥' : i === 1 ? '📈' : i === 2 ? '⚡' : `${i + 1}`}
               </div>
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-brand-green mb-0.5">
+                <p className="text-[9px] font-bold uppercase tracking-[.09em] text-brand-red mb-1">
                   {CATEGORY_LABELS[m.category] ?? m.category} {m.emoji}
                 </p>
-                <p className="text-[13px] font-bold text-brand-text leading-snug truncate">
+                <Link
+                  href={`/mercados/${m.id}`}
+                  className="font-display text-[14px] font-bold text-brand-text leading-snug hover:text-brand-red transition-colors block"
+                >
                   {m.title}
-                </p>
-                <div className="mt-1 flex gap-3 text-[11px] text-brand-text2 font-medium">
+                </Link>
+                <div className="mt-1.5 flex gap-3 font-mono text-[10px] text-brand-text3">
                   <span>👥 {m.volume.toLocaleString()} DICE</span>
-                  <span>⏱ {days}d restantes</span>
+                  <span>⏱ {days}d</span>
                 </div>
               </div>
 
               {/* Sparkline */}
               <div className="flex-shrink-0">
-                <Sparkline probability={m.probability} color={color} />
+                <Sparkline probability={m.probability} color={trendColor} />
               </div>
 
               {/* Probabilidad */}
-              <div className="text-right flex-shrink-0">
-                <p className="font-display text-xl font-extrabold" style={{ color }}>
+              <div className="text-right flex-shrink-0 min-w-[56px]">
+                <p className="font-mono text-xl font-medium text-brand-red leading-none">
                   {m.probability}%
                 </p>
-                <p className="text-[10px] font-bold" style={{ color }}>
-                  {trendUp ? '▲ Al alza' : '▼ A la baja'}
+                <p className="text-[9px] font-bold text-brand-red mt-1">
+                  {trendUp ? '▲ Sube' : '▼ Baja'}
                 </p>
               </div>
             </div>
           );
         })}
+
+        {!loading && markets.length === 0 && (
+          <div className="rounded border border-brand-border bg-white p-10 text-center">
+            <p className="text-3xl mb-3">📊</p>
+            <p className="text-sm font-bold text-brand-text mb-1">No hay mercados activos</p>
+            <p className="text-xs text-brand-text2">Vuelve pronto</p>
+          </div>
+        )}
       </div>
     </div>
   );
