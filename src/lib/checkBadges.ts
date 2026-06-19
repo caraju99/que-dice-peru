@@ -1,5 +1,19 @@
 import { prisma } from '@/lib/prisma';
 
+export type EarnedBadgeInfo = {
+  code: string;
+  name: string;
+  description: string;
+  icon: string;
+  reward: number;
+};
+
+export type BadgeProgress = {
+  code: string;
+  current: number;
+  target: number;
+};
+
 // Revisa y otorga badges nuevos a un usuario. Se llama después de cada compra/venta/resolución.
 export async function checkAndAwardBadges(userId: string) {
   const user = await prisma.user.findUnique({
@@ -10,7 +24,7 @@ export async function checkAndAwardBadges(userId: string) {
     }
   });
 
-  if (!user) return;
+  if (!user) return null;
 
   const earnedCodes = new Set(user.badges.map(b => b.badge.code));
   const allBadges = await prisma.badge.findMany();
@@ -55,40 +69,40 @@ export async function checkAndAwardBadges(userId: string) {
     }
   }
 
-  // Lista de condiciones: code -> cumple?
-  const conditions: Record<string, boolean> = {
-    primera_prediccion: totalPredictions >= 1,
-    cinco_predicciones: totalPredictions >= 5,
-    diez_predicciones: totalPredictions >= 10,
-    veinticinco_predicciones: totalPredictions >= 25,
-    cincuenta_predicciones: totalPredictions >= 50,
+  // Lista de condiciones: code -> { met, current, target }
+  const conditions: Record<string, { met: boolean; current: number; target: number }> = {
+    primera_prediccion: { met: totalPredictions >= 1, current: totalPredictions, target: 1 },
+    cinco_predicciones: { met: totalPredictions >= 5, current: totalPredictions, target: 5 },
+    diez_predicciones: { met: totalPredictions >= 10, current: totalPredictions, target: 10 },
+    veinticinco_predicciones: { met: totalPredictions >= 25, current: totalPredictions, target: 25 },
+    cincuenta_predicciones: { met: totalPredictions >= 50, current: totalPredictions, target: 50 },
 
-    primer_acierto: totalWins >= 1,
-    cinco_aciertos: totalWins >= 5,
-    diez_aciertos: totalWins >= 10,
-    precision_70: resolved.length >= 5 && accuracy >= 70,
-    precision_90: resolved.length >= 10 && accuracy >= 90,
+    primer_acierto: { met: totalWins >= 1, current: totalWins, target: 1 },
+    cinco_aciertos: { met: totalWins >= 5, current: totalWins, target: 5 },
+    diez_aciertos: { met: totalWins >= 10, current: totalWins, target: 10 },
+    precision_70: { met: resolved.length >= 5 && accuracy >= 70, current: Math.round(accuracy), target: 70 },
+    precision_90: { met: resolved.length >= 10 && accuracy >= 90, current: Math.round(accuracy), target: 90 },
 
-    experto_futbol: (winsByCategory['deportes'] || 0) >= 3,
-    politologo: (winsByCategory['politica'] || 0) >= 3,
-    wall_street: (winsByCategory['economia'] || 0) >= 3,
-    chismoso_oficial: (winsByCategory['cultura'] || 0) >= 3,
+    experto_futbol: { met: (winsByCategory['deportes'] || 0) >= 3, current: winsByCategory['deportes'] || 0, target: 3 },
+    politologo: { met: (winsByCategory['politica'] || 0) >= 3, current: winsByCategory['politica'] || 0, target: 3 },
+    wall_street: { met: (winsByCategory['economia'] || 0) >= 3, current: winsByCategory['economia'] || 0, target: 3 },
+    chismoso_oficial: { met: (winsByCategory['cultura'] || 0) >= 3, current: winsByCategory['cultura'] || 0, target: 3 },
 
-    apostador: totalVolume >= 10000,
-    alto_riesgo: maxSingleBet >= 1000,
-    millonario_dice: user.diceBalance >= 20000,
+    apostador: { met: totalVolume >= 10000, current: totalVolume, target: 10000 },
+    alto_riesgo: { met: maxSingleBet >= 1000, current: maxSingleBet, target: 1000 },
+    millonario_dice: { met: user.diceBalance >= 20000, current: user.diceBalance, target: 20000 },
 
-    racha_3: maxStreak >= 3,
-    racha_5: maxStreak >= 5,
-    racha_10: maxStreak >= 10
+    racha_3: { met: maxStreak >= 3, current: maxStreak, target: 3 },
+    racha_5: { met: maxStreak >= 5, current: maxStreak, target: 5 },
+    racha_10: { met: maxStreak >= 10, current: maxStreak, target: 10 }
     // embajador y og_dice se otorgan manualmente desde otros lugares, no aquí
   };
 
   let totalRewardEarned = 0;
-  const newlyEarned: string[] = [];
+  const newlyEarned: EarnedBadgeInfo[] = [];
 
-  for (const [code, met] of Object.entries(conditions)) {
-    if (met && !earnedCodes.has(code)) {
+  for (const [code, info] of Object.entries(conditions)) {
+    if (info.met && !earnedCodes.has(code)) {
       const badge = badgeMap.get(code);
       if (!badge) continue;
 
@@ -97,7 +111,13 @@ export async function checkAndAwardBadges(userId: string) {
       });
 
       totalRewardEarned += badge.reward;
-      newlyEarned.push(badge.name);
+      newlyEarned.push({
+        code: badge.code,
+        name: badge.name,
+        description: badge.description,
+        icon: badge.icon,
+        reward: badge.reward
+      });
     }
   }
 
@@ -108,5 +128,10 @@ export async function checkAndAwardBadges(userId: string) {
     });
   }
 
-  return { newlyEarned, totalRewardEarned };
+  // Progreso de badges no ganados (para mostrar "7/10" en el perfil)
+  const progress: BadgeProgress[] = Object.entries(conditions)
+    .filter(([code]) => !earnedCodes.has(code))
+    .map(([code, info]) => ({ code, current: info.current, target: info.target }));
+
+  return { newlyEarned, totalRewardEarned, progress };
 }

@@ -5,7 +5,9 @@ import { useSession } from 'next-auth/react';
 import { useParams, useRouter } from 'next/navigation';
 import { BuyModal } from '@/components/BuyModal';
 import { Toast } from '@/components/Toast';
+import { BadgeUnlockedModal } from '@/components/BadgeUnlockedModal';
 import { MarketDTO } from '@/lib/types';
+import { EarnedBadgeInfo } from '@/lib/checkBadges';
 
 const CATEGORY_LABELS: Record<string, string> = {
   deportes: 'Deportes',
@@ -124,6 +126,7 @@ export default function MercadoPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [period, setPeriod] = useState('all');
+  const [newBadges, setNewBadges] = useState<EarnedBadgeInfo[]>([]);
   const idRef = useRef(id);
   const periodRef = useRef(period);
 
@@ -169,13 +172,37 @@ export default function MercadoPage() {
     setModal(null);
     showToast(`Posición comprada: ${amount.toLocaleString()} DICE en ${modal?.direction === 'si' ? 'SÍ' : 'NO'}`);
     fetchMarket();
+
+    if (data.newBadges && data.newBadges.length > 0) {
+      setNewBadges(data.newBadges);
+    }
   }
 
-  function shareWhatsApp() {
+  async function shareWhatsApp() {
     if (!market) return;
     const url = `https://dice.pe/mercados/${market.id}`;
     const text = `🇵🇪 *DICE — Mercado de predicciones*\n\n"${market.title}"\n\nEl mercado dice: *${market.probability}%* de SÍ.\n\n¿Qué crees tú? 👇\n${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+
+    // Intentar otorgar el badge Embajador (no bloqueante)
+    if (session) {
+      try {
+        const res = await fetch('/api/badges/embajador', { method: 'POST' });
+        const data = await res.json();
+        if (data.earned) {
+          setBalance((prev) => prev + data.reward);
+          setNewBadges([{
+            code: 'embajador',
+            name: 'Embajador',
+            description: 'Compartiste un mercado por WhatsApp',
+            icon: '📲',
+            reward: data.reward
+          }]);
+        }
+      } catch {
+        // silencioso, no afecta la experiencia de compartir
+      }
+    }
   }
 
   if (loading) return (
@@ -349,6 +376,10 @@ export default function MercadoPage() {
           onClose={() => setModal(null)}
           onConfirm={handleConfirm}
         />
+      )}
+
+      {newBadges.length > 0 && (
+        <BadgeUnlockedModal badges={newBadges} onClose={() => setNewBadges([])} />
       )}
 
       <Toast message={toast} />
