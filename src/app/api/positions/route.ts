@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { checkAndAwardBadges } from '@/lib/checkBadges';
 
 const MIN_AMOUNT = 10;
 
@@ -99,10 +100,18 @@ export async function POST(req: NextRequest) {
     return { updatedUser, updatedMarket, position };
   });
 
+  // Revisar badges después de la compra (fuera de la transacción)
+  const badgeResult = await checkAndAwardBadges(userId);
+  let finalBalance = result.updatedUser.diceBalance;
+  if (badgeResult && badgeResult.totalRewardEarned > 0) {
+    finalBalance += badgeResult.totalRewardEarned;
+  }
+
   return NextResponse.json({
-    diceBalance: result.updatedUser.diceBalance,
+    diceBalance: finalBalance,
     market: result.updatedMarket,
-    position: result.position
+    position: result.position,
+    newBadges: badgeResult?.newlyEarned ?? []
   });
 }
 
@@ -195,12 +204,20 @@ export async function PATCH(req: NextRequest) {
     return { updatedPosition, updatedUser, payout, isPartial, amountToSell, remainingAmount };
   });
 
+  // Revisar badges después de vender (fuera de la transacción)
+  const badgeResult = await checkAndAwardBadges(userId);
+  let finalBalance = result.updatedUser.diceBalance;
+  if (badgeResult && badgeResult.totalRewardEarned > 0) {
+    finalBalance += badgeResult.totalRewardEarned;
+  }
+
   return NextResponse.json({
-    diceBalance: result.updatedUser.diceBalance,
+    diceBalance: finalBalance,
     payout: result.payout,
     position: result.updatedPosition,
     isPartial: result.isPartial,
     amountToSell: result.amountToSell,
-    remainingAmount: result.remainingAmount
+    remainingAmount: result.remainingAmount,
+    newBadges: badgeResult?.newlyEarned ?? []
   });
 }

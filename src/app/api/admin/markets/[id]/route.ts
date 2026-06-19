@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { checkAndAwardBadges } from '@/lib/checkBadges';
 
 export const runtime = 'nodejs';
 
@@ -19,6 +20,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!market) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+
+    const affectedUserIds = new Set<string>();
 
     await prisma.$transaction(async (tx) => {
       await tx.market.update({
@@ -44,8 +47,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
             data: { diceBalance: { increment: payout } }
           });
         }
+
+        affectedUserIds.add(position.userId);
       }
     });
+
+    // Revisar badges para todos los usuarios afectados por esta resolución
+    for (const userId of affectedUserIds) {
+      await checkAndAwardBadges(userId);
+    }
 
     return NextResponse.json({ success: true });
 

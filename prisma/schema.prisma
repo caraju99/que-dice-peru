@@ -119,6 +119,7 @@ model Badge {
   name        String
   description String
   icon        String
+  reward      Int    @default(0)
 
   users UserBadge[]
 }
