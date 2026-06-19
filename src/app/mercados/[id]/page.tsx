@@ -187,6 +187,7 @@ export default function MercadoPage() {
 
   const no = 100 - market.probability;
   const daysLeft = Math.max(0, Math.ceil((new Date(market.closesAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  const isClosed = new Date(market.closesAt).getTime() < Date.now() || market.resolved;
   const trendUp = market.probability >= 50;
   const trendColor = '#C8102E';
   const hasHistory = market.history && market.history.length >= 2;
@@ -231,7 +232,7 @@ export default function MercadoPage() {
             </div>
             <div className="text-right">
               <p className="text-sm font-bold text-brand-red">
-                {trendUp ? '▲ Al alza' : '▼ A la baja'}
+                {isClosed ? '🔒 Cerrado' : trendUp ? '▲ Al alza' : '▼ A la baja'}
               </p>
               <p className="text-[10px] text-white/25 mt-1 font-mono">
                 Cierra {new Date(market.closesAt).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })}
@@ -296,7 +297,12 @@ export default function MercadoPage() {
 
         <div className="bg-white border border-brand-border rounded p-4">
           <p className="text-[9px] font-bold uppercase tracking-[.1em] text-brand-text3 mb-2">Predice ahora</p>
-          {session ? (
+          {isClosed ? (
+            <div className="rounded bg-brand-surface border border-brand-border p-3 text-center">
+              <p className="text-xs font-bold text-brand-text3">🔒 Mercado cerrado</p>
+              <p className="text-[10px] text-brand-text3 mt-1">Ya no se aceptan predicciones</p>
+            </div>
+          ) : session ? (
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => setModal({ direction: 'si' })}

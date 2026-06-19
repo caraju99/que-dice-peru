@@ -41,6 +41,9 @@ export async function POST(req: NextRequest) {
 
     if (!user) throw new Error('Usuario no encontrado.');
     if (!market || market.resolved) throw new Error('Este mercado ya no está disponible.');
+    if (new Date(market.closesAt).getTime() < Date.now()) {
+      throw new Error('Este mercado ya cerró y no acepta más predicciones.');
+    }
     if (user.diceBalance < amount) throw new Error('No tienes suficientes DICE Coins.');
 
     const newPrice = direction === 'si' ? market.probability / 100 : (100 - market.probability) / 100;
@@ -127,6 +130,9 @@ export async function PATCH(req: NextRequest) {
     if (position.userId !== userId) throw new Error('No autorizado.');
     if (position.status !== 'activo') throw new Error('Esta posición ya no está activa.');
     if (position.market.resolved) throw new Error('Este mercado ya fue resuelto.');
+    if (new Date(position.market.closesAt).getTime() < Date.now()) {
+      throw new Error('Este mercado ya cerró y no acepta más operaciones.');
+    }
 
     const amountToSell = sellAmount && Number.isInteger(sellAmount) && sellAmount >= MIN_AMOUNT
       ? Math.min(sellAmount, position.amount)
