@@ -8,7 +8,9 @@ import { WalletBar } from '@/components/WalletBar';
 import { MarketCard } from '@/components/MarketCard';
 import { BuyModal } from '@/components/BuyModal';
 import { Toast } from '@/components/Toast';
+import { BadgeUnlockedModal } from '@/components/BadgeUnlockedModal';
 import { CATEGORY_LABELS, MarketDTO } from '@/lib/types';
+import { EarnedBadgeInfo } from '@/lib/checkBadges';
 
 const FILTERS = ['todos', ...Object.keys(CATEGORY_LABELS)];
 const POLL_INTERVAL = 10000;
@@ -23,6 +25,7 @@ export default function HomePage() {
   const [balance, setBalance] = useState<number>((session?.user as any)?.diceBalance ?? 0);
   const [toast, setToast] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [newBadges, setNewBadges] = useState<EarnedBadgeInfo[]>([]);
   const filterRef = useRef(filter);
 
   useEffect(() => { filterRef.current = filter; }, [filter]);
@@ -77,6 +80,15 @@ export default function HomePage() {
     setAllMarkets((prev) => prev.map((m) => (m.id === data.market.id ? data.market : m)));
     setModal(null);
     showToast(`Posición comprada: ${amount.toLocaleString()} DICE en ${modal.direction === 'si' ? 'SÍ' : 'NO'}`);
+
+    if (data.newBadges && data.newBadges.length > 0) {
+      setNewBadges(data.newBadges);
+    }
+  }
+
+  function handleBadgeEarned(badges: EarnedBadgeInfo[], rewardBalance: number) {
+    setBalance(rewardBalance);
+    setNewBadges(badges);
   }
 
   return (
@@ -192,7 +204,12 @@ export default function HomePage() {
             <p className="text-sm text-brand-text2">No hay mercados en esta categoría todavía.</p>
           )}
           {markets.map((m) => (
-            <MarketCard key={m.id} market={m} onBuy={(market, direction) => setModal({ market, direction })} />
+            <MarketCard
+              key={m.id}
+              market={m}
+              onBuy={(market, direction) => setModal({ market, direction })}
+              onBadgeEarned={handleBadgeEarned}
+            />
           ))}
         </div>
       </div>
@@ -205,6 +222,10 @@ export default function HomePage() {
           onClose={() => setModal(null)}
           onConfirm={handleConfirm}
         />
+      )}
+
+      {newBadges.length > 0 && (
+        <BadgeUnlockedModal badges={newBadges} onClose={() => setNewBadges([])} />
       )}
 
       <Toast message={toast} />

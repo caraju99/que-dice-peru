@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { CATEGORY_LABELS, MarketDTO } from '@/lib/types';
+import { EarnedBadgeInfo } from '@/lib/checkBadges';
 
 type Props = {
   market: MarketDTO;
   onBuy: (market: MarketDTO, direction: 'si' | 'no') => void;
+  onBadgeEarned?: (badges: EarnedBadgeInfo[], rewardBalance: number) => void;
 };
 
 function Sparkline({ data, color, timestamps }: { data: number[]; color: string; timestamps?: string[] }) {
@@ -74,7 +76,7 @@ function Sparkline({ data, color, timestamps }: { data: number[]; color: string;
   );
 }
 
-export function MarketCard({ market, onBuy }: Props) {
+export function MarketCard({ market, onBuy, onBadgeEarned }: Props) {
   const no = 100 - market.probability;
   const daysLeft = Math.max(0, Math.ceil((new Date(market.closesAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 
@@ -92,10 +94,31 @@ export function MarketCard({ market, onBuy }: Props) {
   const trendUp = trend[trend.length - 1] >= trend[0];
   const trendColor = trendUp ? '#C8102E' : '#555555';
 
-  function shareWhatsApp() {
+  async function shareWhatsApp() {
     const url = `https://dice.pe/mercados/${market.id}`;
     const text = `🇵🇪 *DICE — Mercado de predicciones*\n\n"${market.title}"\n\nEl mercado dice: *${market.probability}%* de SÍ.\n\n¿Qué crees tú? 👇\n${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+
+    // Intentar otorgar el badge Embajador (no bloqueante)
+    try {
+      const res = await fetch('/api/badges/embajador', { method: 'POST' });
+      if (res.status === 401) return; // no logueado, no pasa nada
+      const data = await res.json();
+      if (data.earned && onBadgeEarned) {
+        onBadgeEarned(
+          [{
+            code: 'embajador',
+            name: 'Embajador',
+            description: 'Compartiste un mercado por WhatsApp',
+            icon: '📲',
+            reward: data.reward
+          }],
+          data.diceBalance
+        );
+      }
+    } catch {
+      // silencioso, no afecta la experiencia de compartir
+    }
   }
 
   return (
