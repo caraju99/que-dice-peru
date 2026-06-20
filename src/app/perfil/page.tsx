@@ -4,6 +4,18 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { PositionDTO } from '@/lib/types';
+import { BadgeUnlockedModal } from '@/components/BadgeUnlockedModal';
+import { EarnedBadgeInfo } from '@/lib/checkBadges';
+
+type BadgeInfo = {
+  code: string;
+  name: string;
+  description: string;
+  icon: string;
+  earned: boolean;
+  progressCurrent: number | null;
+  progressTarget: number | null;
+};
 
 type Profile = {
   user: {
@@ -19,13 +31,8 @@ type Profile = {
     diceBalance: number;
   };
   positions: PositionDTO[];
-  badges: {
-    code: string;
-    name: string;
-    description: string;
-    icon: string;
-    earned: boolean;
-  }[];
+  badges: BadgeInfo[];
+  newBadges?: EarnedBadgeInfo[];
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -201,6 +208,7 @@ export default function ProfilePage() {
   const [sellModal, setSellModal] = useState<PositionDTO | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [tab, setTab] = useState<'activas' | 'historial' | 'resueltas'>('activas');
+  const [newBadges, setNewBadges] = useState<EarnedBadgeInfo[]>([]);
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login');
@@ -213,6 +221,9 @@ export default function ProfilePage() {
           const data = await r.json();
           if (!r.ok || data.error) { setError(true); return; }
           setProfile(data);
+          if (data.newBadges && data.newBadges.length > 0) {
+            setNewBadges(data.newBadges);
+          }
         })
         .catch(() => setError(true));
     }
@@ -242,6 +253,10 @@ export default function ProfilePage() {
     const profileRes = await fetch('/api/profile');
     const profileData = await profileRes.json();
     setProfile(profileData);
+
+    if (data.newBadges && data.newBadges.length > 0) {
+      setNewBadges(data.newBadges);
+    }
   }
 
   if (status === 'loading' || (!profile && !error)) {
@@ -433,7 +448,7 @@ export default function ProfilePage() {
                       )}
                     </div>
                     <p className="text-[10px] text-brand-text3 font-mono mt-1">
-{new Date((p as any).createdAt).toLocaleString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      {new Date((p as any).createdAt).toLocaleString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
@@ -487,19 +502,40 @@ export default function ProfilePage() {
           <h2 className="font-display text-xl font-bold text-brand-text">Tus logros</h2>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {(profile?.badges ?? []).map((b) => (
-            <div key={b.code}
-              className={`rounded border bg-white p-4 text-center ${b.earned ? 'border-brand-red' : 'border-brand-border opacity-50'}`}
-              style={b.earned ? { borderLeft: '3px solid #C8102E' } : {}}
-            >
-              <div className="text-2xl mb-2">{b.icon}</div>
-              <p className="text-[11px] font-bold text-brand-text mb-1">{b.name}</p>
-              <p className="text-[10px] text-brand-text3">{b.description}</p>
-              <p className={`text-[9px] font-bold uppercase tracking-wider mt-2 ${b.earned ? 'text-brand-red' : 'text-brand-text3'}`}>
-                {b.earned ? '✓ Desbloqueado' : '🔒 Bloqueado'}
-              </p>
-            </div>
-          ))}
+          {(profile?.badges ?? []).map((b) => {
+            const hasProgress = !b.earned && b.progressCurrent !== null && b.progressTarget !== null;
+            const pct = hasProgress ? Math.min(100, Math.round((b.progressCurrent! / b.progressTarget!) * 100)) : 0;
+
+            return (
+              <div key={b.code}
+                className={`rounded border bg-white p-4 text-center ${b.earned ? 'border-brand-red' : 'border-brand-border opacity-70'}`}
+                style={b.earned ? { borderLeft: '3px solid #C8102E' } : {}}
+              >
+                <div className={`text-2xl mb-2 ${!b.earned ? 'grayscale opacity-60' : ''}`}>{b.icon}</div>
+                <p className="text-[11px] font-bold text-brand-text mb-1">{b.name}</p>
+                <p className="text-[10px] text-brand-text3 mb-2">{b.description}</p>
+
+                {b.earned ? (
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-brand-red">
+                    ✓ Desbloqueado
+                  </p>
+                ) : hasProgress ? (
+                  <div>
+                    <div className="h-1 bg-brand-surface rounded overflow-hidden mb-1">
+                      <div className="h-full bg-brand-text3 transition-[width] duration-500" style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className="text-[9px] font-mono font-bold text-brand-text3">
+                      {b.progressCurrent!.toLocaleString()} / {b.progressTarget!.toLocaleString()}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-brand-text3">
+                    🔒 Bloqueado
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -509,6 +545,10 @@ export default function ProfilePage() {
           onClose={() => setSellModal(null)}
           onConfirm={handleSell}
         />
+      )}
+
+      {newBadges.length > 0 && (
+        <BadgeUnlockedModal badges={newBadges} onClose={() => setNewBadges([])} />
       )}
 
       <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 whitespace-nowrap rounded border border-white/10 bg-brand-dark px-6 py-3 text-[12px] font-bold text-white transition-opacity duration-300 z-40 ${toast ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>

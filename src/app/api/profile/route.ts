@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { checkAndAwardBadges } from '@/lib/checkBadges';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -45,18 +46,22 @@ export async function GET() {
   const allBadges = await prisma.badge.findMany();
   const earnedCodes = new Set(user.badges.map(b => b.badge.code));
 
+  // Obtener progreso de badges no ganados (sin otorgar nada nuevo, solo leer)
+  const badgeCheck = await checkAndAwardBadges(userId);
+  const progressMap = new Map((badgeCheck?.progress ?? []).map(p => [p.code, p]));
+
   return NextResponse.json({
     user: {
       id: user.id,
       name: user.name,
       email: user.email,
-      diceBalance: user.diceBalance,
+      diceBalance: badgeCheck?.totalRewardEarned ? user.diceBalance + badgeCheck.totalRewardEarned : user.diceBalance,
       isAdmin: user.isAdmin
     },
     stats: {
       totalPredictions: mainPositions.filter(p => p.status === 'activo').length,
       accuracy,
-      diceBalance: user.diceBalance
+      diceBalance: badgeCheck?.totalRewardEarned ? user.diceBalance + badgeCheck.totalRewardEarned : user.diceBalance
     },
     positions: [
       // Posiciones principales
@@ -88,12 +93,18 @@ export async function GET() {
         createdAt: p.createdAt.toISOString()
       }))
     ],
-    badges: allBadges.map(b => ({
-      code: b.code,
-      name: b.name,
-      description: b.description,
-      icon: b.icon,
-      earned: earnedCodes.has(b.code)
-    }))
+    badges: allBadges.map(b => {
+      const progress = progressMap.get(b.code);
+      return {
+        code: b.code,
+        name: b.name,
+        description: b.description,
+        icon: b.icon,
+        earned: earnedCodes.has(b.code),
+        progressCurrent: progress?.current ?? null,
+        progressTarget: progress?.target ?? null
+      };
+    }),
+    newBadges: badgeCheck?.newlyEarned ?? []
   });
 }
